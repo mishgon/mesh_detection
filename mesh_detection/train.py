@@ -16,6 +16,7 @@ def criterion(output, target):
 
 def validator(val_ids, load_image, load_key_points, metrics):
     def validate(model):
+        model.eval()
         metrics_values = {name: [] for name in metrics.keys()}
         for i in val_ids:
             prediction = predict(load_image(i), model)
@@ -33,6 +34,7 @@ def train(model, batch_iter, optimizer, criterion, n_epochs, validate=None):
     val_metrics = []
     for epoch in tqdm(range(n_epochs)):
         # training
+        model.train()
         epoch_losses = []
         for images, key_points in batch_iter():
             x, target = sequence_to_torch(images, key_points, device=model)
