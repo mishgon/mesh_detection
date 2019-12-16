@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 def pad_to_largest(images):
@@ -65,9 +66,14 @@ def to_np(x):
     return x.data.cpu().numpy()
 
 
-def to_torch(x, device):
+def to_torch(x, device=None):
     return torch.from_numpy(x).to(device=get_device(device))
 
 
-def sequence_to_torch(*inputs, device):
+def sequence_to_torch(*inputs, device=None):
     return [to_torch(x, device) for x in inputs]
+
+
+def show_key_points(key_points):
+    ys, xs = key_points.T
+    plt.scatter(xs, ys)
