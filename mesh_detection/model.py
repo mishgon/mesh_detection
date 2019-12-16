@@ -42,7 +42,7 @@ class BitNet(nn.Module):
 
         self.conv_seqs1 = nn.ModuleList([build_conv_seq(level[0], nn.ReLU) for level in structure[:-1]])
         self.poolings = nn.ModuleList([pooling() for _ in structure[:-1]])
-        self.lowest_conv_seq = build_conv_seq(structure[-1])
+        self.lowest_conv_seq = build_conv_seq(structure[-1], groups=n_points)
         self.conv_seqs2 = nn.ModuleList([
             build_conv_seq([n_points * n_channels for n_channels in [*level[1], 1]], groups=n_points)
             for level in structure[:-1]
@@ -61,7 +61,39 @@ class BitNet(nn.Module):
         points: torch.tensor
             Tensor of shape ``(batch_size, n_points, len(spatial))`` with points.
         """
-        raise NotImplementedError
+        exp_L = torch.exp(x)
+        
+        batch_size, n_points = x.size()[:2]
+        size = x.size()[2:]
+        sm.reshape((*sm.size(), 1))
+        if len(size) == 2:
+            H, W = size
+            H_coords = torch.arange(H, dtype=torch.float)
+            W_coords = torch.arange(W, dtype=torch.float)
+            coords = torch.stack([
+                H_coords.repeat(W, 1).T.reshape(-1),
+                W_coords.repeat(H)
+            ]).T
+            
+            div = torch.sum(exp_L, dim=(2, 3))
+            
+        else:
+            H, W, D = size
+            H_coords = torch.arange(H, dtype=torch.float)
+            W_coords = torch.arange(W, dtype=torch.float)
+            D_coords = torch.arange(D, dtype=torch.float)
+            coords = torch.stack([
+                H_coords.repeat(W * D, 1).T.reshape(-1),
+                W_coords.repeat(D, 1).T.reshape(-1).repeat(H),
+                D_coords.repeat(H * W)
+            ]).T
+            
+            div = torch.sum(exp_L, dim=(2, 3, 4))
+            
+        samx = torch.floor((exp_L @ coords) / div.reshape((*div.size(), 1))).type(torch.LongTensor)
+        
+        return samx
+    
 
     @staticmethod
     def extract_patches(feature_map, starts):
@@ -79,12 +111,14 @@ class BitNet(nn.Module):
         patches: torch.tensor
             Tensor of shape ``(batch_size, n_points * n_channels, 2, 2, ...)``.
         """
+        
+        
         raise NotImplementedError
 
     def forward(self, x):
         # contracting path
         feature_maps = []
-        for conv_seq, pool in zip(self.conv, self.poolings):
+        for conv_seq, pool in zip(self.conv_seqs1, self.poolings):
             x = conv_seq(x)
             feature_maps.append(x.clone())
             x = pool(x)
