@@ -69,7 +69,39 @@ class BitNet(nn.Module):
         points: torch.tensor
             Tensor of shape ``(batch_size, n_points, len(spatial))`` with points.
         """
-        raise NotImplementedError
+        exp_L = torch.exp(x)
+
+        batch_size, n_points = x.size()[:2]
+        size = x.size()[2:]
+        sm.reshape((*sm.size(), 1))
+        if len(size) == 2:
+            H, W = size
+            H_coords = torch.arange(H, dtype=torch.float)
+            W_coords = torch.arange(W, dtype=torch.float)
+            coords = torch.stack([
+                H_coords.repeat(W, 1).T.reshape(-1),
+                W_coords.repeat(H)
+            ]).T
+
+            div = torch.sum(exp_L, dim=(2, 3))
+
+        else:
+            H, W, D = size
+            H_coords = torch.arange(H, dtype=torch.float)
+            W_coords = torch.arange(W, dtype=torch.float)
+            D_coords = torch.arange(D, dtype=torch.float)
+            coords = torch.stack([
+                H_coords.repeat(W * D, 1).T.reshape(-1),
+                W_coords.repeat(D, 1).T.reshape(-1).repeat(H),
+                D_coords.repeat(H * W)
+            ]).T
+
+            div = torch.sum(exp_L, dim=(2, 3, 4))
+
+        samx = torch.floor((exp_L @ coords) / div.reshape((*div.size(), 1))).type(torch.LongTensor)
+
+        return samx
+
 
     @staticmethod
     def extract_patches(feature_map, starts, patch_size):
