@@ -2,6 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import numpy as np
+
+from mesh_detection.utils import to_np, to_torch
+
+
+def predict(image, model):
+    return to_np(model(to_torch(image[None, None], device=model)))[0]
+
 
 class BitNet(nn.Module):
     def __init__(self, structure, n_points, conv_block, pooling):
@@ -64,22 +72,35 @@ class BitNet(nn.Module):
         raise NotImplementedError
 
     @staticmethod
-    def extract_patches(feature_map, starts):
+    def extract_patches(feature_map, starts, patch_size):
         """
         Parameters
         ----------
         feature_map: torch.tensor
             Tensor of shape ``(batch_size, n_channels, *spatial)`` with logits.
         starts: torch.LongTensor
-            Tensor of shape ``(batch_size, n_points, len(spatial)`` with start spatial indices of patches
-            (spatial size of each patch is equal to 2 x 2 x ...)
+            Tensor of shape ``(batch_size, n_points, len(spatial)`` with start spatial indices of patches.
+        patch_size: int sequence of ints
+            Patch size - int ot sequence of ``len(spatial)`` ints.
 
         Returns
         -------
         patches: torch.tensor
-            Tensor of shape ``(batch_size, n_points * n_channels, 2, 2, ...)``.
+            Tensor of shape ``(batch_size, n_points * n_channels, *patch_size)``.
         """
-        raise NotImplementedError
+        batch_size, n_channels, *spatial = feature_map.shape
+        patch_size = np.broadcast_to(patch_size, len(spatial))
+        bbox_indices = torch.stack(torch.meshgrid(*map(torch.arange, patch_size))).to(starts)
+        bbox_indices = bbox_indices + starts[(..., *len(spatial) * [None])]  # of shape (bs, np, len(sp), *ps)
+        spatial_indices = [indices.squeeze(2).unqueeze(1) for indices in torch.split(bbox_indices, 1, 2)]
+        batch_indices = torch.arange(batch_size)[(slice(None), *(2 + len(spatial)) * [None])]
+        channel_indices = torch.arange(n_channels)[(None, slice(None), *(1 + len(spatial)) * [None])]
+
+        # get patches tensor of shape (bs, nc, np, *ps)
+        feature_map = torch.unsqueeze(feature_map, 2)
+        patches = feature_map[(batch_indices, channel_indices, 0, *spatial_indices)]
+        patches = torch.cat([channel.squeeze(1) for channel in torch.split(patches, 1, 1)], 1)
+        return patches
 
     def forward(self, x):
         # contracting path
@@ -91,9 +112,9 @@ class BitNet(nn.Module):
 
         # points predicting path
         points = self.softargmax(self.lowest_conv_seq(x))
-        for conv_seq, fm in zip(reversed(self.conv_seqs2), reversed(feature_maps)):
-            points = 2 * points.long()
-            x = self.extract_patches(fm, points)
+        for conv_seq, fm, pool in reversed(list(zip(self.conv_seqs2, feature_maps, self.poolings))):
+            points = points.long() * torch.tensor(pool.kernel_size).to(points).long()
+            x = self.extract_patches(fm, points, pool.kernel_size)
             points = points + self.softargmax(conv_seq(x))
 
         return points

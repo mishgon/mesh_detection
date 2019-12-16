@@ -18,4 +18,4 @@ class FaceDataset:
         """
         Nans mean absence of annotation
         """
-        return self.df.loc[identifier, self.df.columns[:-1]].values.astype(np.float32).reshape((-1, 2))
+        return np.flip(self.df.loc[identifier, self.df.columns[:-1]].values.astype(np.float32).reshape((-1, 2)), 1)

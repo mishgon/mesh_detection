@@ -1,4 +1,7 @@
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 def pad_to_largest(images):
@@ -20,7 +23,7 @@ def pad_to_shape(image, shape):
 def randomly_flip(image, key_points):
     if np.random.binomial(1, .5):
         image = np.flip(image, 1)
-        key_points[:, 0] = image.shape[1] - key_points[:, 0]
+        key_points[:, 1] = image.shape[1] - key_points[:, 1]
 
     return image, key_points
 
@@ -41,3 +44,30 @@ def composition(*transformers):
         return inputs
 
     return apply
+
+
+def get_device(x=None):
+    if isinstance(x, nn.Module):
+        try:
+            return next(x.parameters()).device
+        except StopIteration:
+            raise ValueError('The device could not be determined as the passed model has no parameters.')
+    if isinstance(x, torch.Tensor):
+        return x.device
+
+    if x is None:
+        x = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    return torch.device(x)
+
+
+def to_np(x):
+    return x.data.cpu().numpy()
+
+
+def to_torch(x, device):
+    return torch.from_numpy(x).to(device=get_device(device))
+
+
+def sequence_to_torch(*inputs, device):
+    return [to_torch(x, device) for x in inputs]
