@@ -42,7 +42,7 @@ class BitNet(nn.Module):
 
         self.conv_seqs1 = nn.ModuleList([build_conv_seq(level[0], nn.ReLU) for level in structure[:-1]])
         self.poolings = nn.ModuleList([pooling() for _ in structure[:-1]])
-        self.lowest_conv_seq = build_conv_seq(structure[-1])
+        self.lowest_conv_seq = build_conv_seq([*structure[-1], n_points])
         self.conv_seqs2 = nn.ModuleList([
             build_conv_seq([n_points * n_channels for n_channels in [*level[1], 1]], groups=n_points)
             for level in structure[:-1]
@@ -84,7 +84,7 @@ class BitNet(nn.Module):
     def forward(self, x):
         # contracting path
         feature_maps = []
-        for conv_seq, pool in zip(self.conv, self.poolings):
+        for conv_seq, pool in zip(self.conv_seqs1, self.poolings):
             x = conv_seq(x)
             feature_maps.append(x.clone())
             x = pool(x)
