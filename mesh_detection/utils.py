@@ -22,20 +22,26 @@ def pad_to_shape(image, shape):
     return np.pad(image, pad_width, mode='constant')
 
 
-def randomly_flip(image, key_points):
-    if np.random.binomial(1, .5):
-        image = np.flip(image, 1)
-        key_points[:, 1] = image.shape[1] - key_points[:, 1]
-
-    return image, key_points
-
-
 def add_channel_dim(image, key_points):
     return image[None], key_points
 
 
-def identity(x):
-    return x
+def randomly_shift(image, key_points, max_shift=30):
+    shift = np.random.randint(-max_shift, max_shift, size=len(image.shape))
+
+    # shift image
+    shape = np.asarray(image.shape)
+    start = np.maximum(0, -shift)
+    stop = shape - np.maximum(0, shift)
+    cropped_image = image[tuple(slice(axis_start, axis_stop) for axis_start, axis_stop in zip(start, stop))]
+    shifted_image = np.pad(cropped_image, pad_width=tuple((a, b) for a, b in zip(shape - stop, start)), mode='constant')
+
+    # shift key points
+    shifted_key_points = key_points + shift
+    valid = np.all((shifted_key_points >= 0) & (shifted_key_points <= shape), 1)
+    shifted_key_points[~valid] = np.nan
+
+    return shifted_image, shifted_key_points.astype(np.float32)
 
 
 def composition(*transformers):

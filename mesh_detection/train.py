@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from tqdm import tqdm_notebook as tqdm
+from tqdm import tqdm
 
 from mesh_detection.utils import to_np, sequence_to_torch
 from mesh_detection.model import predict

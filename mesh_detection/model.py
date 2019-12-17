@@ -119,8 +119,8 @@ class BitNet(nn.Module):
         # points predicting path
         points = self.softargmax(self.lowest_conv_seq(x))
         for conv_seq, fm, pool in reversed(list(zip(self.conv_seqs2, feature_maps, self.poolings))):
-            starts = points.long().detach() * torch.tensor(pool.kernel_size).long()
+            starts = points.long() * torch.tensor(pool.kernel_size)
             x = self.extract_patches(fm, starts, pool.kernel_size)
-            points = points + self.softargmax(conv_seq(x))
+            points = points * torch.tensor(pool.kernel_size).to(points) + self.softargmax(conv_seq(x))
 
         return points
